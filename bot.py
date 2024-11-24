@@ -47,7 +47,7 @@ def compose_path(step, previous_choices):
     elif step == 4:
         return os.path.join(base_path, previous_choices[0], previous_choices[1])
     elif step in [5, 6]:
-        return f"assets/{step-1} шаг"
+        return f"assets/{step-1} ШАГ"
     return base_path
 
 # Создание итогового изображения
