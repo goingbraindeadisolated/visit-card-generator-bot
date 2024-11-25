@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import csv
+import pandas as pd
 from dotenv import load_dotenv
 from io import BytesIO
 from telegram import InlineQueryResultPhoto
@@ -84,7 +85,6 @@ async def send_step_options(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Создаём инлайн-клавиатуру
     keyboard_texts = sorted(KEYBOARD_TEXTS[str(step)])
-    logger.info(keyboard_texts)
     keyboard = [
         [InlineKeyboardButton(keyboard_texts[i], callback_data=f"choice_{step}_{i}")]
         for i in range(len(keyboard_texts))
@@ -203,14 +203,15 @@ async def handle_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 photo=final_buffer
             )
+            logger.info(f"Пользователь {user_id} перешел к последнему этапу ")
             context.user_data["step"] = step + 1
-            logger.info(context.user_data)
 
             keyboard_texts = sorted(KEYBOARD_TEXTS["goodbye"])
             keyboard = \
-                    [[InlineKeyboardButton(keyboard_texts[0],
-                    switch_inline_query=BOT_TEXTS['message_for_share'])]] + \
-                    [[InlineKeyboardButton(keyboard_texts[1], callback_data="promocode")]]
+                    [[InlineKeyboardButton(keyboard_texts[0], switch_inline_query=BOT_TEXTS['message_for_share'])]] + \
+                    [[InlineKeyboardButton(keyboard_texts[1],callback_data="promocode")]] + \
+                    [[InlineKeyboardButton(keyboard_texts[2], callback_data="lottery")]]
+
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             await context.bot.send_message(
@@ -219,39 +220,53 @@ async def handle_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
 
-# Финальная функция для показа результата
-async def final_step(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает итоговое изображение."""
-    user_id = update.callback_query.from_user.id
-    chat_id = update.callback_query.message.chat_id
-
-    # Получаем id последнего сообщения
-    file_id = message.photo[-1].file_id
-    file = await context.bot.get_file(file_id)  
-    final_image_url = file.file_path
-    context.user_data["final_image_url"] = final_image_url
-    keyboard_texts = sorted(KEYBOARD_TEXTS["goodbye"])
-
-    # Кнопка "Поделиться"
-    keyboard = \
-            [[InlineKeyboardButton(keyboard_texts[0],
-            switch_inline_query=f"{final_image_url}")]] + \
-            [[InlineKeyboardButton(keyboard_texts[1], callback_data="promocode")]]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=BOT_TEXTS["goodbye"],
-        reply_markup=reply_markup
-    )
 async def send_promocode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.callback_query.from_user.id
     chat_id = update.callback_query.message.chat_id
+    logger.info(f"Пользователю {user_id} отправлен промокод")
     await context.bot.send_message(
         chat_id=chat_id,
         text=BOT_TEXTS["promocode"],
     )
+
+async def join_lottery(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.callback_query.message.chat_id
+    user = update.callback_query.from_user
+    username = user.username
+    user_id = user.id
+
+    lottery_data_path = 'lottery_data.xlsx'
+
+    # Данные для проверки и добавления
+    data = {"username": [username], "user_id": [user_id]}
+
+    # Преобразуем список словарей в DataFrame
+    new_df = pd.DataFrame(data)
+
+    # Проверяем, существует ли файл
+    if os.path.exists(lottery_data_path):
+        # Читаем существующие данные
+        existing_data = pd.read_excel(lottery_data_path)
+
+        # Проверяем, есть ли новые данные в существующих
+        merged_data = pd.merge(new_df, existing_data, how='inner')
+        if not merged_data.empty:
+            logger.info(f"Пользователь {username} уже есть в списке участников")
+        else:
+            # Добавляем данные в конец
+            updated_data = pd.concat([existing_data, new_df], ignore_index=True)
+            updated_data.to_excel(lottery_data_path, index=False)
+            logger.info(f"Пользователь {username} добавлен в список участников")
+    else:
+        # Если файла нет, создаем новый с данными
+        new_df.to_excel(lottery_data_path, index=False)
+        logger.info(f"Создан файл с данными для конкурса {lottery_data_path}")
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=BOT_TEXTS["lottery"],
+    )
+
 # Основная функция
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -260,5 +275,6 @@ if __name__ == "__main__":
                                    & filters.Regex(KEYBOARD_TEXTS["greeting"]), send_step_options))
     app.add_handler(CallbackQueryHandler(handle_step, pattern="^choice_"))
     app.add_handler(CallbackQueryHandler(send_promocode, pattern="^promocode$"))
+    app.add_handler(CallbackQueryHandler(join_lottery, pattern="^lottery$"))
     app.run_polling()
 
