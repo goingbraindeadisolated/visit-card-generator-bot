@@ -6,8 +6,10 @@ import pandas as pd
 from dotenv import load_dotenv
 from io import BytesIO
 from telegram import InlineQueryResultPhoto
+from telegram.constants import ParseMode
 from telegram import (
-    Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+    Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup,
+    KeyboardButton 
 )
 from telegram.ext import (
     ApplicationBuilder, CallbackQueryHandler, InlineQueryHandler, CommandHandler, MessageHandler, ContextTypes, filters
@@ -227,6 +229,7 @@ async def send_promocode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=chat_id,
         text=BOT_TEXTS["promocode"],
+        parse_mode=ParseMode.MARKDOWN_V2
     )
 
 async def join_lottery(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -234,6 +237,7 @@ async def join_lottery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.callback_query.from_user
     username = user.username
     user_id = user.id
+    parsemode = ParseMode.MARKDOWN_V2
 
     lottery_data_path = 'lottery_data.xlsx'
 
@@ -252,20 +256,30 @@ async def join_lottery(update: Update, context: ContextTypes.DEFAULT_TYPE):
         merged_data = pd.merge(new_df, existing_data, how='inner')
         if not merged_data.empty:
             logger.info(f"Пользователь {username} уже есть в списке участников")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=BOT_TEXTS["already_in_lottery_list"],
+                parse_mode=parsemode
+            )
         else:
             # Добавляем данные в конец
             updated_data = pd.concat([existing_data, new_df], ignore_index=True)
             updated_data.to_excel(lottery_data_path, index=False)
             logger.info(f"Пользователь {username} добавлен в список участников")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=BOT_TEXTS["added_to_lottery_list"],
+                parse_mode=parsemode
+            )
     else:
         # Если файла нет, создаем новый с данными
         new_df.to_excel(lottery_data_path, index=False)
         logger.info(f"Создан файл с данными для конкурса {lottery_data_path}")
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=BOT_TEXTS["lottery"],
-    )
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=BOT_TEXTS["added_to_lottery_list"],
+            parse_mode=parsemode
+        )
 
 # Основная функция
 if __name__ == "__main__":
