@@ -210,7 +210,7 @@ async def handle_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             keyboard_texts = sorted(KEYBOARD_TEXTS["goodbye"])
             keyboard = \
-                    [[InlineKeyboardButton(keyboard_texts[0], switch_inline_query=BOT_TEXTS['message_for_share'])]] + \
+                    [[InlineKeyboardButton(keyboard_texts[0], switch_inline_query=BOT_TEXTS["message_for_share"])]] + \
                     [[InlineKeyboardButton(keyboard_texts[1],callback_data="promocode")]] + \
                     [[InlineKeyboardButton(keyboard_texts[2], callback_data="lottery")]]
 
